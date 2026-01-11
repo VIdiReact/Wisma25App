@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ROOM MONITOR</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
+	
+    <style>
+        :root { 
+            --bg: #f0f2f5; --kosong: #2ecc71; --terisi: #e74c3c; 
+            --ackipas: #f1c40f; --kotor: #3498db; --maintenance: #7f8c8d; --primary: #2c3e50; 
+        }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); margin: 0; padding-bottom: 50px; }
+        .hidden { display: none !important; }
+        
+        /* 18. Desain Kotak Kamar */
+        header { position: sticky; top: 0; z-index: 100; background: white; display: flex; justify-content: space-between; align-items: center; padding: 10px 15px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .btn-header { padding: 8px 10px; border-radius: 6px; border: none; font-weight: bold; cursor: pointer; color: white; font-size: 0.7rem; margin-left: 5px; }
+        
+        .container { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; padding: 15px; }
+        .room-card { background: white; border-radius: 12px; padding: 12px; text-align: center; cursor: pointer; border-left: 8px solid #ddd; box-shadow: 0 3px 6px rgba(0,0,0,0.05); min-height: 230px; display: flex; flex-direction: column; justify-content: space-between; position: relative; transition: 0.3s; }
+        
+        /* 11. Status Berurutan */
+        .status-kosong { border-left-color: var(--kosong); }
+        .status-terisi { border-left-color: var(--terisi); }
+        .status-ac-kipas { border-left-color: var(--ackipas); }
+        .status-kotor { border-left-color: var(--kotor); }
+        .status-maintenance { border-left-color: var(--maintenance); }
+
+        .room-number { font-size: 1.8rem; font-weight: 800; color: #333; }
+        /* 7, 29 & 34. Footnote Lengkap & Kendala Kamar */
+        .room-footnote { font-size: 0.65rem; color: #444; background: #f8f9fa; padding: 6px; border-radius: 6px; border: 1px solid #e9ecef; margin-top: 5px; text-align: left; line-height: 1.3; }
+        .co-tag { color: red; font-weight: bold; font-size: 0.75rem; } 
+        .kendala-text { color: #e67e22; font-weight: bold; display: block; margin-top: 3px; border-top: 1px dashed #ccc; padding-top: 2px; }
+        
+        /* 27. Posisi pop-up tidak timbal balik */
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); justify-content: center; align-items: center; padding: 10px; }
+        .modal-content { background: white; border-radius: 15px; width: 100%; max-width: 600px; padding: 20px; max-height: 90vh; overflow-y: auto; position: relative; }
+        
+        label { font-size: 0.75rem; font-weight: bold; color: #555; display: block; margin-top: 8px; }
+        input, select, textarea { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; font-size: 0.9rem; margin-top: 4px; }
+        .btn-main { background: var(--primary); color: white; padding: 12px; width: 100%; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; margin-top: 15px; }
+        
+        /* 5. Menu Kelola Karyawan (Rapi & Garis Pemisah) */
+        .emp-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        .emp-table tr { border-bottom: 1px solid #eee; }
+        .emp-table td { padding: 12px 8px; }
+        .btn-del-red { background: #e74c3c; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; float: right; font-weight: bold; }
+
+        /* 16. Mode Edit */
+        .editable-cell { background: #fffde7; cursor: text; border: 1px dashed #ccc; padding: 4px; }
+        .preview-table { width: 100%; border-collapse: collapse; font-size: 0.75rem; margin-bottom: 20px; }
+        .preview-table th, .preview-table td { border: 1px solid #ddd; padding: 6px; text-align: left; }
+    </style>
+</head>
+<body>
+
+<div id="loginPage" style="position:fixed; top:0; left:0; width:100%; height:100%; background:var(--primary); z-index:2000; display:flex; justify-content:center; align-items:center;">
+    <div style="background:white; padding:40px; border-radius:20px; text-align:center; width:320px;">
+        <h1 style="color:var(--primary); margin-bottom:30px;">WISMA 25</h1>
+        <div id="loginStep1">
+            <button class="btn-main" onclick="prepLogin()">Resepsionis (Admin)</button>
+            <button class="btn-main" style="background:#7f8c8d" onclick="login('Karyawan')">Login Karyawan</button>
+        </div>
+        <div id="loginStep2" class="hidden">
+            <input type="password" id="passInput" placeholder="Sandi Admin" autofocus onkeypress="if(event.key==='Enter') checkPass()">
+            <button class="btn-main" onclick="checkPass()">MASUK (Enter)</button>
+            <button style="background:none; border:none; color:gray; cursor:pointer; margin-top:10px;" onclick="location.reload()">Kembali</button>
+        </div>
+    </div>
+</div>
+
+<header>
+    <div><b>PENGINAPAN WISMA 25 <span id="roleLabel" style="font-size:0.7rem; opacity:0.6"></span></b></div>
+    <div id="adminMenu" class="hidden">
+        <button class="btn-header" style="background:#2980b9" onclick="location.href='Kasir25.html'">🛒 KASIR</button>
+        <button class="btn-header" style="background:#e67e22" onclick="openM('expenseModal')">+ BIAYA</button>
+        <button class="btn-header" style="background:#34495e" onclick="openLoanModal()">KASBON</button>
+        <button class="btn-header" style="background:#8e44ad" onclick="openM('reportFilterModal')">LAPORAN</button>
+        <button class="btn-header" style="background:#16a085" onclick="openM('employeeModal')">KARYAWAN</button>
+        <button class="btn-header" style="background:#c0392b" onclick="logout()">OUT</button>
+    </div>
+</header>
+
+<div class="container" id="roomContainer"></div>
+
+<div class="modal" id="roomModal">
+    <div class="modal-content">
+        <div id="modalStep1">
+            <h2 id="roomTitle"></h2>
+            <div id="roomActions"></div>
+            <button class="btn-main" style="background:#95a5a6" onclick="closeM('roomModal')">Tutup (Esc)</button>
+        </div>
+        <div id="modalStep2" class="hidden">
+            <h3>Check-In Kamar <span id="targetRoomDisplay"></span></h3>
+            <label>1. Nama Tamu</label><input type="text" id="gName" onkeypress="focusNext(event, 'gNik')">
+            <label>2. NIK (Identitas)</label><input type="number" id="gNik" onkeypress="focusNext(event, 'gHp')">
+            <label>3. Nomor HP Tamu</label><input type="number" id="gHp" onkeypress="focusNext(event, 'gAddress')">
+            <label>4. Alamat Lengkap</label><textarea id="gAddress" rows="2" onkeypress="focusNext(event, 'gGuarantee')"></textarea>
+            <label>5. Jaminan</label>
+            <select id="gGuarantee" onchange="toggleGuarantee()"><option value="KTP">KTP</option><option value="SIM">SIM</option><option value="Lainnya">Lainnya...</option><option value="Tidak Ada">Tidak Ada (Deposit)</option></select>
+            <div id="depositArea" class="hidden"><label>6. Nominal Deposit Rp</label><input type="number" id="gDeposit"></div>
+            <label>7. Tanggal & Jam</label><input type="text" id="gTime" readonly>
+            <label>8. Status Bayar</label><select id="gStatusBayar" onchange="togglePayDetail()"><option value="Lunas">Lunas</option><option value="Kurang">Belum Lunas</option></select>
+            <div id="payDetailArea"></div>
+            <label>10. Jenis Kamar</label><input type="text" id="gType" readonly>
+            <label>11. Harga Kamar</label><input type="number" id="gPrice" readonly>
+            <label>12. Nomor Kamar</label><input type="text" id="gRoomId" readonly>
+            <button class="btn-main" style="background:#27ae60" onclick="processCheckIn()">PROSES CHECK-IN (Enter)</button>
+            <button class="btn-main" style="background:#95a5a6" onclick="backToStep1()">Batal</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal" id="loanModal">
+    <div class="modal-content">
+        <h3>Pinjaman / Kasbon Karyawan</h3>
+        <label>Pilih Karyawan</label><select id="loanEmpSelect"></select>
+        <label>Nominal Pinjaman Rp</label><input type="number" id="loanAmount" onkeypress="if(event.key==='Enter') saveLoan()">
+        <button class="btn-main" style="background:#2ecc71" onclick="saveLoan()">Simpan Kasbon</button>
+        <hr>
+        <h4>Rekap Rentang Tanggal</h4>
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px">
+            <div><label>Dari Tanggal</label><input type="date" id="rekapStart"></div>
+            <div><label>Sampai Tanggal</label><input type="date" id="rekapEnd"></div>
+        </div>
+        <button class="btn-main" style="background:#34495e" onclick="showLoanRekapDate()">LIHAT REKAP DATA</button>
+        <button class="btn-main" style="background:gray" onclick="closeM('loanModal')">Tutup</button>
+    </div>
+</div>
+
+<div class="modal" id="employeeModal">
+    <div class="modal-content">
+        <h3>Kelola Karyawan</h3>
+        <div style="display:flex; gap:5px">
+            <input type="text" id="newEmpName" placeholder="Nama Karyawan Baru">
+            <button onclick="addEmployee()" style="background:var(--kosong); color:white; border:none; padding:10px; border-radius:6px; cursor:pointer">Tambah</button>
+        </div>
+        <div style="margin-top:15px; border:1px solid #ddd; border-radius:8px;">
+            <table class="emp-table" id="employeeListArea"></table>
+        </div>
+        <button class="btn-main" style="background:gray" onclick="closeM('employeeModal')">Tutup</button>
+    </div>
+</div>
+
+<div class="modal" id="editReportModal">
+    <div class="modal-content" style="max-width:98%">
+        <h3 id="previewTitle">Preview Laporan (Mode Edit)</h3>
+        <div id="reportPreviewArea" style="overflow-x:auto"></div>
+        <div id="grandTotalArea" style="background:#f8f9fa; color:#333; padding:15px; border:2px solid var(--primary); border-radius:8px; margin-top:10px; font-weight:bold"></div>
+        <button class="btn-main" style="background:#27ae60" onclick="exportToPDF()">CETAK KE PDF (Enter)</button>
+        <button class="btn-main" style="background:gray" onclick="closeM('editReportModal')">Kembali (Esc)</button>
+    </div>
+</div>
+
+<div class="modal" id="reportFilterModal">
+    <div class="modal-content">
+        <h3>Filter Laporan</h3>
+        <label>Dari Tanggal</label><input type="date" id="repStart">
+        <label>Sampai Tanggal</label><input type="date" id="repEnd">
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:20px">
+            <button class="btn-main" style="background:#3498db" onclick="prepareReport('abang')">LAPORAN ABANG</button>
+            <button class="btn-main" style="background:#9b59b6" onclick="prepareReport('kakak')">LAPORAN KAKAK</button>
+        </div>
+        <button class="btn-main" style="background:gray" onclick="closeM('reportFilterModal')">Batal</button>
+    </div>
+</div>
+
+<div class="modal" id="expenseModal">
+    <div class="modal-content">
+        <h3>Tambah Biaya (+Biaya)</h3>
+        <label>Keterangan Pengeluaran</label><input type="text" id="expNote" placeholder="Contoh: Beli Sabun">
+        <label>Nominal Rp</label><input type="number" id="expAmount" onkeypress="if(event.key==='Enter') saveExpense()">
+        <button class="btn-main" onclick="saveExpense()">Simpan Biaya</button>
+        <button class="btn-main" style="background:gray" onclick="closeM('expenseModal')">Batal</button>
+    </div>
+</div>
+
+<script>
+    const firebaseConfig = { apiKey: "AIzaSyA2rvSdY-gZOjauf0zlCpNgW3Nu5hbi4y4", authDomain: "wisma25v3.firebaseapp.com", databaseURL: "https://wisma25v3-default-rtdb.asia-southeast1.firebasedatabase.app", projectId: "wisma25v3" };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    let fullRooms = {}, currentRoomId = null, currentMode = "";
+    let globalSums = { sewa: 0, biaya: 0, kasbon: 0 };
+
+    window.onkeydown = (e) => { 
+        if(e.key === "Escape") document.querySelectorAll('.modal').forEach(m => m.style.display = 'none'); 
+        if(e.key === "Enter") {
+            if(document.getElementById('editReportModal').style.display === 'flex') exportToPDF();
+            if(document.getElementById('modalStep2').style.display === 'block') processCheckIn();
+        }
+    };
+
+    window.onload = () => { if(localStorage.getItem('wismaRole')) login(localStorage.getItem('wismaRole')); };
+    
+    function prepLogin() { 
+        document.getElementById('loginStep1').classList.add('hidden'); 
+        document.getElementById('loginStep2').classList.remove('hidden');
+        setTimeout(() => document.getElementById('passInput').focus(), 100); 
+    }
+
+    function checkPass() { if(document.getElementById('passInput').value === "877887") { localStorage.setItem('wismaRole', 'Resepsionis'); login('Resepsionis'); } else alert("Sandi Salah!"); }
+    
+    function login(role) {
+        document.getElementById('loginPage').style.display = 'none';
+        document.getElementById('roleLabel').innerText = "| " + role;
+        if(role === 'Resepsionis') document.getElementById('adminMenu').classList.remove('hidden');
+        db.ref('rooms').on('value', snap => { fullRooms = snap.val() || {}; renderGrid(); });
+        syncEmployees();
+    }
+    
+    function logout() { localStorage.removeItem('wismaRole'); location.reload(); }
+
+    function renderGrid() {
+        const cont = document.getElementById('roomContainer'); cont.innerHTML = '';
+        for(let i=1; i<=24; i++){
+            const id = i.toString().padStart(2, '0');
+            const r = fullRooms[id] || { status: 'Kosong' };
+            let css = r.status.toLowerCase().replace(/\//g, '-').replace(/ /g, '-');
+            let coTag = r.isCO ? '<span class="co-tag"> (CO)</span>' : '';
+            
+            // 34. Footnote dengan Kendala
+            let kendalaHtml = (r.status === 'Kotor' && r.kendala) ? `<span class="kendala-text">⚠️ Kendala: ${r.kendala}</span>` : '';
+            
+            let fn = r.status === 'Maintenance' ? `<div class="room-footnote" style="color:red">⚠️ ${r.keterangan || 'RUSAK'}</div>` : 
+                     `<div class="room-footnote">
+                        <b>Tamu:</b> ${r.guestName || '-'}<br>
+                        <b>Dep:</b> Rp ${(r.deposit || 0).toLocaleString()}<br>
+                        <b>Sisa:</b> Rp ${(r.kurang || 0).toLocaleString()}
+                        ${kendalaHtml}
+                      </div>`;
+
+            cont.innerHTML += `<div class="room-card status-${css}" onclick="openRoom('${id}')">
+                <div style="font-size:0.7rem; font-weight:bold">${i <= 5 ? 'NON-AC (150rb)' : 'AC (200rb)'}</div>
+                <div class="room-number">${id}</div>
+                <div style="font-size:0.8rem; font-weight:bold">${r.status}${coTag}</div>
+                ${fn}
+            </div>`;
+        }
+    }
+
+    function openRoom(id) {
+        currentRoomId = id; const r = fullRooms[id] || { status: 'Kosong' };
+        document.getElementById('roomTitle').innerText = "Opsi Kamar " + id;
+        const acts = document.getElementById('roomActions'); acts.innerHTML = '';
+        
+        if(r.status === 'Kosong') {
+            acts.innerHTML = `<button class="btn-main" onclick="showCheckIn()">Check-In</button>`;
+        } else if(r.status === 'Terisi') {
+            acts.innerHTML = `<button class="btn-main" style="background:var(--ackipas); color:#333" onclick="updateStatus('AC/Kipas', '', true)">Ganti ke AC/Kipas (CO)</button>
+                              <button class="btn-main" style="background:var(--kotor)" onclick="checkOut()">Check-Out (Bersihkan)</button>`;
+        } else if(r.status === 'AC/Kipas') {
+            acts.innerHTML = `<button class="btn-main" style="background:var(--kotor)" onclick="checkOut()">Check-Out (Bersihkan)</button>`;
+        } else if(r.status === 'Kotor') {
+            acts.innerHTML = `<button class="btn-main" onclick="updateStatus('Kosong')">Selesai Bersihkan (Kosongkan)</button>`;
+        }
+        
+        if(r.status === 'Maintenance') acts.innerHTML = `<button class="btn-main" style="background:var(--kosong)" onclick="updateStatus('Kosong')">Selesai Perbaikan</button>`;
+        else acts.innerHTML += `<button class="btn-main" style="background:var(--maintenance)" onclick="promptMaint()">Set Maintenance</button>`;
+        
+        openM('roomModal');
+    }
+
+    // 25, 28 & 34. Check-out dengan log transaksi & kendala kotor
+    function checkOut() {
+        const r = fullRooms[currentRoomId];
+        let kendalaKmr = "";
+        if(confirm("Apakah ada kendala/masalah pada kamar ini?")) {
+            kendalaKmr = prompt("Sebutkan kendala kamar:");
+        }
+
+        if(r && r.transKey) {
+            db.ref('transactions/' + r.transKey).update({ guestName: r.guestName + " (CO)", isCO: true });
+        }
+        db.ref('rooms/' + currentRoomId).update({ 
+            status: 'Kotor', 
+            isCO: true, 
+            kendala: kendalaKmr || "" 
+        }).then(() => closeM('roomModal'));
+    }
+
+    function showLoanRekapDate() {
+        const start = document.getElementById('rekapStart').value;
+        const end = document.getElementById('rekapEnd').value;
+        if(!start || !end) return alert("Harap pilih rentang tanggal data!");
+        db.ref('loans').once('value', snap => {
+            let rekap = {};
+            snap.forEach(c => {
+                const d = c.val(); const dDate = new Date(d.timestamp).toISOString().split('T')[0];
+                if(dDate >= start && dDate <= end) { rekap[d.emp] = (rekap[d.emp] || 0) + parseInt(d.amount); }
+            });
+            let txt = `REKAP KASBON (${start} s/d ${end}):\n\n`;
+            for(let n in rekap) txt += `- ${n}: Rp ${rekap[n].toLocaleString()}\n`;
+            alert(Object.keys(rekap).length ? txt : "Tidak ada data pada rentang ini.");
+        });
+    }
+
+    async function prepareReport(mode) {
+        currentMode = mode; 
+        const start = document.getElementById('repStart').value; 
+        const end = document.getElementById('repEnd').value;
+        if(!start || !end) return alert("Pilih tanggal!");
+        
+        const [sT, sE, sL] = await Promise.all([db.ref('transactions').once('value'), db.ref('expenses').once('value'), db.ref('loans').once('value')]);
+        
+        let html = '';
+        const shifts = [{n:'Pagi (07-18)', s:7, e:18}, {n:'Malam (18-07)', s:18, e:7}];
+        
+        shifts.forEach(sh => {
+            html += `<h4>Shift ${sh.n}</h4><table class="preview-table" id="table${sh.n.split(' ')[0]}">
+            <thead><tr><th>Jam</th><th>Kmr</th><th>Tamu</th><th>Identitas & HP</th><th>Harga</th><th>Aksi</th></tr></thead><tbody>`;
+            sT.forEach(c => {
+                const d = c.val(); const dt = new Date(d.timestamp); const dDate = dt.toISOString().split('T')[0]; const hour = dt.getHours();
+                const isMatch = (sh.s === 7) ? (hour >= 7 && hour < 18) : (hour >= 18 || hour < 7);
+                if(dDate >= start && dDate <= end && isMatch) {
+                    let price = (mode === 'kakak') ? 140000 : (d.price || (parseInt(d.id) <= 5 ? 150000 : 200000));
+                    html += `<tr>
+                        <td>${dt.getHours().toString().padStart(2,'0')}:${dt.getMinutes().toString().padStart(2,'0')}</td>
+                        <td>${d.id}</td>
+                        <td contenteditable="true" class="editable-cell">${d.guestName}</td>
+                        <td>NIK: ${d.nik || '-'}<br>HP: ${d.hp || '-'}</td>
+                        <td contenteditable="true" class="editable-cell">${price}</td>
+                        <td><button style="background:red; color:white; border:none; cursor:pointer" onclick="this.closest('tr').remove(); calcGrand();">Hapus</button></td>
+                    </tr>`;
+                }
+            });
+            html += `</tbody></table>`;
+        });
+
+        html += `<h4>Operasional (+Biaya)</h4><table class="preview-table" id="tableExp"><tbody>`;
+        sE.forEach(c => {
+            const d = c.val(); const dDate = new Date(d.timestamp).toISOString().split('T')[0];
+            if(dDate >= start && dDate <= end) { html += `<tr><td contenteditable="true" class="editable-cell">${d.note}</td><td contenteditable="true" class="editable-cell">${d.amount}</td><td><button onclick="this.closest('tr').remove(); calcGrand();">X</button></td></tr>`; }
+        });
+        html += `</tbody></table>`;
+
+        if(mode === 'abang') {
+            html += `<h4>Kasbon Karyawan</h4><table class="preview-table" id="tableLoan"><tbody>`;
+            sL.forEach(c => {
+                const d = c.val(); const dDate = new Date(d.timestamp).toISOString().split('T')[0];
+                if(dDate >= start && dDate <= end) { html += `<tr><td>${d.emp}</td><td contenteditable="true" class="editable-cell">${d.amount}</td><td><button onclick="this.closest('tr').remove(); calcGrand();">X</button></td></tr>`; }
+            });
+            html += `</tbody></table>`;
+        }
+
+        document.getElementById('reportPreviewArea').innerHTML = html; 
+        calcGrand();
+        openM('editReportModal');
+    }
+
+    function calcGrand() {
+        let totalSewa = 0, totalBiaya = 0, totalKasbon = 0;
+        ['#tablePagi', '#tableMalam'].forEach(id => {
+            document.querySelectorAll(id + ' tbody tr').forEach(tr => { totalSewa += parseInt(tr.cells[4].innerText) || 0; });
+        });
+        document.querySelectorAll('#tableExp tbody tr').forEach(tr => { totalBiaya += parseInt(tr.cells[1].innerText) || 0; });
+        
+        let rumusTxt = "Rumus: Sewa Kamar - Biaya - Kasbon";
+        if(currentMode === 'abang') {
+            document.querySelectorAll('#tableLoan tbody tr').forEach(tr => { totalKasbon += parseInt(tr.cells[1].innerText) || 0; });
+        } else {
+            rumusTxt = "Rumus: Sewa Kamar - Biaya";
+        }
+
+        const grand = totalSewa - totalBiaya - totalKasbon;
+        document.getElementById('grandTotalArea').innerHTML = `
+            <div>Total Sewa Kamar: Rp ${totalSewa.toLocaleString()}</div>
+            <div>Total Biaya: Rp ${totalBiaya.toLocaleString()}</div>
+            ${currentMode === 'abang' ? `<div>Total Kasbon: Rp ${totalKasbon.toLocaleString()}</div>` : ''}
+            <hr>
+            <div style="font-size:1.4rem; color:red">GRAND TOTAL: Rp ${grand.toLocaleString()}</div>
+            <div style="font-size:0.7rem; font-style:italic; margin-top:5px; color:#666">${rumusTxt}</div>
+        `;
+        globalSums = { sewa: totalSewa, biaya: totalBiaya, kasbon: totalKasbon };
+    }
+
+    function exportToPDF() {
+        const { jsPDF } = window.jspdf; const doc = new jsPDF();
+        const start = document.getElementById('repStart').value;
+        const end = document.getElementById('repEnd').value;
+        
+        doc.setFontSize(16); doc.text("Laporan Wisma 25", 14, 15);
+        
+        doc.setFontSize(10);
+        let tglText = (start === end) ? `Tanggal: ${start}` : `Periode: ${start} s/d ${end}`;
+        doc.text(tglText, 196, 15, { align: 'right' });
+
+        let finalY = 20;
+        const tables = ['#tablePagi', '#tableMalam', '#tableExp'];
+        if(currentMode === 'abang') tables.push('#tableLoan');
+        
+        tables.forEach(tID => { 
+            if(document.querySelector(tID)) { 
+                doc.autoTable({ html: tID, startY: finalY + 10, theme: 'grid', styles: { fontSize: 8 } }); 
+                finalY = doc.lastAutoTable.finalY; 
+            } 
+        });
+
+        const grand = globalSums.sewa - globalSums.biaya - globalSums.kasbon;
+        doc.setFontSize(11);
+        doc.text(`Total Sewa Kamar: Rp ${globalSums.sewa.toLocaleString()}`, 14, finalY + 15);
+        doc.text(`Total Biaya: Rp ${globalSums.biaya.toLocaleString()}`, 14, finalY + 22);
+        if(currentMode === 'abang') doc.text(`Total Kasbon: Rp ${globalSums.kasbon.toLocaleString()}`, 14, finalY + 29);
+        
+        doc.setFontSize(14); doc.setTextColor(231, 76, 60);
+        doc.text(`GRAND TOTAL: Rp ${grand.toLocaleString()}`, 14, finalY + 40);
+        
+        doc.setFontSize(8); doc.setTextColor(100);
+        let rumusPdf = currentMode === 'abang' ? "(Grand Total = Sewa Kamar - Biaya - Kasbon)" : "(Grand Total = Sewa Kamar - Biaya)";
+        doc.text(rumusPdf, 14, finalY + 45);
+
+        doc.save(`Laporan_Wisma25_${Date.now()}.pdf`);
+    }
+
+    function showCheckIn() { 
+        const id = currentRoomId; const now = new Date();
+        const price = parseInt(id) <= 5 ? 150000 : 200000;
+        const type = parseInt(id) <= 5 ? 'NON-AC' : 'AC';
+        
+        document.getElementById('targetRoomDisplay').innerText = id;
+        document.getElementById('gRoomId').value = id;
+        document.getElementById('gPrice').value = price;
+        document.getElementById('gType').value = type;
+        document.getElementById('gTime').value = now.toLocaleString('id-ID');
+        
+        document.getElementById('modalStep1').classList.add('hidden'); 
+        document.getElementById('modalStep2').classList.remove('hidden'); 
+        setTimeout(() => document.getElementById('gName').focus(), 100); 
+    }
+
+    function processCheckIn() {
+        const newTransRef = db.ref('transactions').push();
+        const d = { 
+            id: currentRoomId, status: "Terisi", guestName: document.getElementById('gName').value, 
+            nik: document.getElementById('gNik').value, hp: document.getElementById('gHp').value,
+            address: document.getElementById('gAddress').value, guarantee: document.getElementById('gGuarantee').value,
+            deposit: parseInt(document.getElementById('gDeposit')?.value) || 0,
+            kurang: parseInt(document.getElementById('gKurang')?.value) || 0, 
+            timestamp: Date.now(), price: parseInt(document.getElementById('gPrice').value), 
+            isCO: false, transKey: newTransRef.key, kendala: "" 
+        };
+        newTransRef.set(d);
+        db.ref('rooms/'+currentRoomId).set(d).then(() => { closeM('roomModal'); });
+    }
+
+    function updateStatus(s, ket = "", keepData = false) { 
+        let updateObj = { status: s, keterangan: ket };
+        if(!keepData) {
+            updateObj.guestName = '---'; updateObj.kurang = 0; updateObj.deposit = 0; updateObj.isCO = false; updateObj.kendala = "";
+        } else {
+            updateObj.isCO = true;
+        }
+        db.ref('rooms/'+currentRoomId).update(updateObj).then(() => closeM('roomModal')); 
+    }
+
+    function syncEmployees() { 
+        db.ref('employees').on('value', snap => { 
+            const area = document.getElementById('employeeListArea'); const s1 = document.getElementById('loanEmpSelect'); 
+            area.innerHTML = ''; s1.innerHTML = ''; 
+            snap.forEach(c => { 
+                area.innerHTML += `<tr><td>${c.val().name}</td><td><button class="btn-del-red" onclick="delEmp('${c.key}')">Hapus</button></td></tr>`; 
+                s1.innerHTML += `<option value="${c.val().name}">${c.val().name}</option>`; 
+            }); 
+        }); 
+    }
+    
+    function addEmployee() { const n = document.getElementById('newEmpName').value; if(n) db.ref('employees').push({name:n}).then(()=>document.getElementById('newEmpName').value=''); }
+    function delEmp(k) { if(confirm('Hapus karyawan ini?')) db.ref('employees/'+k).remove(); }
+    function saveExpense() { db.ref('expenses').push({note:document.getElementById('expNote').value, amount:parseInt(document.getElementById('expAmount').value), timestamp:Date.now()}).then(()=>closeM('expenseModal')); }
+    function saveLoan() { db.ref('loans').push({emp:document.getElementById('loanEmpSelect').value, amount:parseInt(document.getElementById('loanAmount').value), timestamp:Date.now()}).then(()=>alert('Pinjaman Tersimpan!')); }
+    function promptMaint() { const ket = prompt("Keterangan Kerusakan/Kendala:"); if(ket) updateStatus('Maintenance', ket); }
+    function focusNext(e, nextId) { if(e.key === 'Enter') { e.preventDefault(); document.getElementById(nextId).focus(); } }
+    function toggleGuarantee() { (document.getElementById('gGuarantee').value === 'Tidak Ada') ? document.getElementById('depositArea').classList.remove('hidden') : document.getElementById('depositArea').classList.add('hidden'); }
+    function togglePayDetail() { document.getElementById('payDetailArea').innerHTML = (document.getElementById('gStatusBayar').value === 'Kurang') ? `<label>9. Sisa Kurang Rp</label><input type="number" id="gKurang">` : ''; }
+    
+    function openM(id) { 
+        document.querySelectorAll('.modal').forEach(m => m.style.display = 'none'); 
+        document.getElementById(id).style.display = 'flex'; 
+    }
+    function closeM(id) { document.getElementById(id).style.display = 'none'; }
+    function openLoanModal() { openM('loanModal'); syncEmployees(); }
+    function backToStep1() { document.getElementById('modalStep1').classList.remove('hidden'); document.getElementById('modalStep2').classList.add('hidden'); }
+</script>
+</body>
+</html>
