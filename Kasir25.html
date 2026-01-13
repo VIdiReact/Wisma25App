@@ -4,458 +4,420 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kasir App</title>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
-    <style>
-        :root {
-            --primary: #2c3e50;
-            --accent: #3498db;
-            --success: #27ae60;
-            --warning: #f39c12;
-            --danger: #e74c3c;
-            --light: #ecf0f1;
-            --edit: #9b59b6;
-            --adjust: #e67e22;
-            --price: #34495e;
-        }
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; background: #f4f7f6; display: flex; flex-direction: column; height: 100vh; }
-        header { background: var(--primary); color: white; padding: 1rem; display: flex; justify-content: space-between; align-items: center; }
-		.btn-back { 
-			background: var(--accent); 
-			color: white; 
-			padding: 8px 15px; 
-			border-radius: 5px; 
-			text-decoration: none; 
-			font-weight: bold; 
-			font-size: 0.8rem; 
-			border: none; 
-			cursor: pointer; 
     
-			/* TAMBAHAN PENTING: */
-			width: auto;   /* Mencegah tombol melar 100% */
-			margin: 0;     /* Menghapus margin bawaan global agar rapi di tengah vertikal */
-		}
-        .container { display: grid; grid-template-columns: 1.4fr 1.1fr; gap: 20px; padding: 20px; flex: 1; overflow-y: auto; }
-        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); margin-bottom: 20px; }
+    <style>
+        :root { --primary: #2c3e50; --success: #27ae60; --accent: #3498db; --danger: #e74c3c; }
+        body { font-family: 'Segoe UI', sans-serif; margin: 0; background: #f4f7f6; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
         
-        .product-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; }
-        .product-item { background: var(--light); padding: 15px; border-radius: 8px; text-align: center; cursor: pointer; border: 1px solid #ddd; transition: 0.2s; }
-        .product-item:hover { background: var(--accent); color: white; }
+        /* Header */
+        header { background: var(--primary); color: white; padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
         
-        input, select, button { padding: 10px; margin: 5px 0; border: 1px solid #ddd; border-radius: 5px; width: 100%; box-sizing: border-box; }
-        button { cursor: pointer; border: none; font-weight: bold; color: white; transition: 0.2s; }
-        button:active { opacity: 0.7; }
-        
-        .btn-add { background: var(--success); }
-        .btn-move { background: var(--warning); font-size: 0.7rem; }
-        .btn-adjust { background: var(--adjust); font-size: 0.7rem; }
-        .btn-price { background: var(--price); font-size: 0.7rem; }
-        .btn-edit { background: var(--edit); font-size: 0.7rem; }
-        .btn-reset { background: var(--danger); }
-        .btn-export { background: var(--accent); }
-        .btn-del-item { background: var(--danger); padding: 2px 8px; width: auto; font-size: 0.8rem; }
+        /* Layout Utama */
+        .main-content { display: grid; grid-template-columns: 1.5fr 1fr; gap: 20px; padding: 20px; flex: 1; overflow: hidden; box-sizing: border-box; }
+        .left-column { display: flex; flex-direction: column; gap: 20px; overflow: hidden; height: 100%; }
+        .right-column { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
 
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.85rem; }
-        table th, table td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-        table th { background: #f8f9fa; color: #333; }
+        .card { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
+        .scrollable { overflow-y: auto; flex: 1; padding-right: 5px; }
 
-        #modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; z-index: 100; }
-        .modal-content { background: white; padding: 30px; border-radius: 10px; width: 300px; text-align: center; }
-        
-        .total-amount { font-size: 1.8rem; color: var(--success); font-weight: bold; margin: 10px 0; }
-        .badge { background: #ddd; padding: 2px 5px; border-radius: 4px; font-size: 0.75rem; color: #333; }
-        hr { border: 0; border-top: 1px solid #eee; margin: 20px 0; }
-        .action-stack { display: flex; flex-direction: column; gap: 4px; }
+        /* Rak Barang Rapi (Poin 10) */
+        .product-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+        .product-item { background: white; border: 2px solid #ddd; padding: 15px; border-radius: 8px; text-align: center; cursor: pointer; transition: 0.2s; display: flex; flex-direction: column; justify-content: space-between; height: 110px; }
+        .product-item:hover { border-color: var(--accent); background: #f9f9f9; }
+        .p-name { font-weight: bold; font-size: 1rem; color: var(--primary); }
+        .p-stock { color: var(--success); font-size: 0.85rem; margin: 5px 0; }
+        .p-price { font-weight: bold; color: #e67e22; font-size: 0.95rem; }
+
+        /* Riwayat Shift Tinggi Penuh (Poin 19) */
+        .riwayat-card { height: 100%; }
+        table { width: 100%; border-collapse: collapse; }
+        table th, table td { border: 1px solid #ddd; padding: 10px; text-align: left; font-size: 0.9rem; }
+        table th { position: sticky; top: 0; background: #eee; z-index: 1; }
+
+        /* Footer & Total Penjualan Besar (Poin 12) */
+        footer { background: var(--primary); color: white; padding: 5px 20px; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; height: 85px; }
+        .footer-left { font-weight: bold; font-size: 1.2rem; }
+        .footer-right { text-align: right; line-height: 1; }
+        .total-label { font-size: 1rem; margin-right: 10px; }
+        .big-price { font-size: 3rem; font-weight: bold; }
+
+        /* Tombol & Input */
+        button { padding: 10px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; transition: 0.2s; }
+        .btn-blue { background: var(--accent); color: white; }
+        .btn-red { background: var(--danger); color: white; }
+        .btn-green { background: var(--success); color: white; width: 100%; margin-top: 10px; }
+        input { padding: 12px; margin: 5px 0; border: 1px solid #ccc; border-radius: 4px; width: 100%; box-sizing: border-box; font-size: 1.1rem; }
+
+        /* Modal */
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); justify-content: center; align-items: center; z-index: 1000; }
+        .modal-content { background: white; padding: 25px; border-radius: 12px; width: 450px; max-height: 90vh; overflow-y: auto; }
     </style>
 </head>
 <body>
 
 <header>
-    <div><strong>KASIR 25</strong> | Petugas: <span id="display-karyawan">-</span></div>
-	<button class="btn-back" onclick="location.href='index3.html'">🏠 KEMBALI KE ROOM MONITOR</button>
-    <div id="clock">00:00:00</div>
-</header>
+    <div style="font-size: 1.8rem; font-weight: bold;">Kasir 25</div> <div id="clock" style="font-size: 1.2rem; font-weight: 500;">00:00 - 01/01/2000</div> </header>
 
-<div class="container">
-    <div>
-        <div class="card">
-            <h3>Menu Penjualan</h3>
-            <div class="product-grid" id="pos-grid"></div>
+<div class="main-content">
+    <div class="left-column">
+        <div class="card" style="flex: 2.5;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <h3 style="margin:0;">Menu Jual</h3>
+                <button class="btn-blue" onclick="location.href='index3.html'">🏠 Kembali</button> </div>
+            <div class="product-grid scrollable" id="pos-grid"></div>
         </div>
-
-        <div class="card">
-            <h3>Riwayat Penjualan Shift</h3>
-            <table id="table-sales">
-                <thead>
-                    <tr>
-                        <th>Jam</th>
-                        <th>Barang</th>
-                        <th>Qty</th>
-                        <th>Total</th>
-                        <th>Aksi</th>
-                    </tr>
-                </thead>
-                <tbody id="sales-log"></tbody>
-            </table>
-        </div>
+        
+        <div class="card" style="flex: 1;">
+            <h3 style="margin:0 0 10px 0;">Shift & Laporan</h3>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <button class="btn-blue" onclick="openModal('modal-staff')">👤 Petugas</button>
+                <button class="btn-blue" onclick="openModal('modal-stok')">📦 Cek Stok (G/K)</button> <button class="btn-blue" onclick="openModal('modal-input')">➕ Input Barang</button> <button class="btn-blue" style="background:#9b59b6;" onclick="exportPDF()">🖨️ Cetak Laporan</button>
+            </div>
+            <button class="btn-red" style="margin-top:10px;" onclick="resetShift()">🔄 Ganti Shift (Hapus Tampilan)</button> </div>
     </div>
 
-    <div>
-        <div class="card">
-            <h3>Status Shift</h3>
-            <input type="text" id="staff-name" placeholder="Nama Karyawan" onchange="updateStaff()">
-            <div class="total-amount" id="total-revenue">Rp 0</div>
-            
-            <button onclick="manualRefresh()" style="background: #8e44ad; color: white; width: 100%; padding: 10px; border: none; border-radius: 5px; cursor: pointer; margin-bottom: 10px; font-weight: bold;">
-                🔄 Sinkron Cloud Sekarang
-            </button>
-            
-            <button class="btn-export" onclick="exportPDF()">Ekspor PDF (Penjualan & Stok)</button>
-            <button class="btn-reset" onclick="resetShift()">Reset Shift / Ganti Petugas</button>
-            <p style="font-size: 0.7rem; color: #666; margin-top: 5px; text-align: center;">
-                *Data otomatis sinkron setiap 30 detik
-            </p>
-        </div>
-
-        <div class="card">
-            <h3>Input Barang Baru</h3>
-            <input type="text" id="p-name" placeholder="Nama Barang">
-            <input type="number" id="p-stock-gudang" placeholder="Stok Gudang">
-            <input type="number" id="p-stock-kulkas" placeholder="Stok Kulkas">
-            <input type="number" id="p-price" placeholder="Harga Jual">
-            <button class="btn-add" onclick="saveProduct()">Simpan Barang</button>
-            
-            <hr>
-            <h4>Kelola Barang & Stok</h4>
-            <table id="stock-table">
-                <thead>
-                    <tr>
-                        <th>Barang</th>
-                        <th>Stok (G/K)</th>
-                        <th>Aksi</th>
-                    </tr>
-                </thead>
-                <tbody id="stock-list"></tbody>
-            </table>
+    <div class="right-column">
+        <div class="card riwayat-card">
+            <h3 style="margin:0 0 10px 0;">Riwayat Shift Ini</h3>
+            <div class="scrollable">
+                <table>
+                    <thead>
+                        <tr><th>Jam</th><th>Barang</th><th>Qty</th><th>Total</th></tr>
+                    </thead>
+                    <tbody id="sales-log"></tbody>
+                </table>
+            </div>
         </div>
     </div>
 </div>
 
-<div id="modal">
+<footer>
+    <div class="footer-left">PETUGAS: <span id="staff-label">-</span></div>
+    <div class="footer-right">
+        <span class="total-label">TOTAL PENJUALAN</span>
+        <span class="big-price" id="display-total-val">= RP. 0</span>
+    </div>
+</footer>
+
+<div id="modal-staff" class="modal">
     <div class="modal-content">
-        <h3 id="modal-title">Jumlah Beli</h3>
-        <p id="modal-stock-info"></p>
-        <input type="number" id="buy-qty" value="1" min="1">
-        <button class="btn-add" onclick="processSale()">Konfirmasi</button>
-        <button onclick="closeModal()" style="background:#ccc; color: black; border: none; padding: 10px; border-radius: 5px; cursor: pointer;">Batal</button>
+        <h3>Ganti Petugas</h3>
+        <input type="text" id="staff-input" placeholder="Nama Petugas" autofocus>
+        <button class="btn-green" onclick="updateStaff()">Simpan (Enter)</button>
+        <button class="btn-red" style="width:100%; margin-top:5px;" onclick="closeModal('modal-staff')">Batal (Esc)</button>
+    </div>
+</div>
+
+<div id="modal-stok" class="modal">
+    <div class="modal-content" style="width: 700px; max-width: 95%;">
+        <h3>Stok Gudang & Kulkas</h3>
+        <div class="scrollable" style="max-height: 400px;">
+            <table>
+                <thead><tr><th>Nama Barang</th><th>Gudang</th><th>Kulkas</th><th>Aksi</th></tr></thead>
+                <tbody id="stock-list"></tbody>
+            </table>
+        </div>
+        <button class="btn-red" style="width:100%; margin-top:15px;" onclick="closeModal('modal-stok')">Tutup (Esc)</button>
+    </div>
+</div>
+
+<div id="modal-input" class="modal">
+    <div class="modal-content">
+        <h3>Input Barang Baru</h3>
+        <input type="text" id="p-name" placeholder="Nama Barang">
+        <input type="number" id="p-stock-gudang" placeholder="Stok Gudang">
+        <input type="number" id="p-stock-kulkas" placeholder="Stok Kulkas">
+        <input type="text" id="p-price" placeholder="Harga Jual" onkeyup="formatRupiah(this)">
+        <button class="btn-green" onclick="saveProduct()">Simpan Barang (Enter)</button>
+        <button class="btn-red" style="width:100%; margin-top:5px;" onclick="closeModal('modal-input')">Batal (Esc)</button>
+    </div>
+</div>
+
+<div id="modal-sale" class="modal">
+    <div class="modal-content">
+        <h3>Konfirmasi Pembelian</h3>
+        <p id="info-barang-jual" style="font-weight:bold; font-size:1.1rem; color:var(--primary);"></p>
+        <label>Jumlah Beli:</label>
+        <input type="number" id="buy-qty" value="1" min="1" autofocus>
+        <button class="btn-green" onclick="processSale()">Konfirmasi (Enter)</button>
+        <button class="btn-red" style="width:100%; margin-top:5px;" onclick="closeModal('modal-sale')">Batal (Esc)</button>
+    </div>
+</div>
+
+<div id="modal-calc" class="modal">
+    <div class="modal-content">
+        <h3>Kalkulator Kembalian</h3>
+        <p style="font-size:1.1rem;">Total Tagihan: <span id="calc-total" style="font-weight:bold; color:var(--success);">0</span></p>
+        <input type="text" id="calc-bayar" placeholder="Masukkan Uang Pembayaran" onkeyup="formatRupiah(this)" autofocus>
+        <button class="btn-green" onclick="hitungKembalian()">Hitung Kembalian (Enter)</button>
+        <div id="calc-result" style="margin:20px 0; font-weight:bold; font-size:1.8rem; color:var(--danger); text-align:center; min-height:40px;"></div>
+        <button class="btn-blue" style="width:100%" onclick="closeModal('modal-calc')">Selesai (Esc)</button>
     </div>
 </div>
 
 <script>
-    // 1. URL WEB APP GOOGLE SCRIPT
-    const CLOUD_URL = "https://script.google.com/macros/s/AKfycbzTEIV6_93OwKSSPGuJPoe945HeBK5V_jt-FPLTWF2n7WlFkzUoDjrTDQjv4Qw3YBkw5w/exec"; 
+    // Konfigurasi Firebase (Poin 21, 25, 26, 27)
+    const firebaseConfig = {
+        apiKey: "AIzaSyBgtHGA5JKGHk41XEySIOdpikDqo_UCI9g",
+        authDomain: "kasir25-36b45.firebaseapp.com",
+        projectId: "kasir25-36b45",
+        storageBucket: "kasir25-36b45.firebasestorage.app",
+        databaseURL: "https://kasir25-36b45-default-rtdb.asia-southeast1.firebasedatabase.app/",
+        messagingSenderId: "841813796050",
+        appId: "1:841813796050:web:c0a74488c7c4af1975390b",
+        measurementId: "G-FFD99B27D6"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
 
     let products = [];
-    let sales = JSON.parse(localStorage.getItem('sales')) || [];
+    let allSales = [];
+    let shiftId = localStorage.getItem('shiftId') || Date.now().toString();
+    localStorage.setItem('shiftId', shiftId);
     let currentStaff = localStorage.getItem('currentStaff') || "-";
     let selectedIdx = null;
 
-    // Inisialisasi awal
-    document.getElementById('display-karyawan').innerText = currentStaff;
-    document.getElementById('staff-name').value = currentStaff === "-" ? "" : currentStaff;
-    
-    // Ambil data dari Cloud saat aplikasi dibuka
-    loadFromCloud();
+    // Sinkronasi Cepat Realtime Database
+    db.ref('products').on('value', (snap) => {
+        const val = snap.val();
+        products = val ? Object.entries(val).map(([id, data]) => ({ id, ...data })) : [];
+        renderAll();
+    });
 
-    // SINKRONISASI OTOMATIS: Menarik data dari cloud setiap 30 detik
-    // Ini memastikan Laptop 2 mendapatkan update stok jika Laptop 1 melakukan transaksi
-    setInterval(() => {
-        console.log("Sinkronisasi otomatis dengan Cloud...");
-        loadFromCloud(true); // true menandakan silent reload (tanpa mengganggu user)
-    }, 30000); 
+    db.ref('sales').on('value', (snap) => {
+        const val = snap.val();
+        allSales = val ? Object.values(val) : [];
+        renderAll();
+    });
 
-    setInterval(() => {
-        document.getElementById('clock').innerText = new Date().toLocaleTimeString('id-ID');
-    }, 1000);
-
-    // --- FUNGSI CLOUD ---
-
-    async function loadFromCloud(isSilent = false) {
-		try {
-			if(!isSilent) console.log("Menarik data dari cloud...");
-			const response = await fetch(CLOUD_URL);
-			const data = await response.json();
-        
-			if (data) {
-				// Update Produk
-				if (data.products) {
-					products = data.products;
-					localStorage.setItem('products', JSON.stringify(products));
-				}
-				// Update Penjualan (Tambahkan baris ini)
-				if (data.recentSales) {
-					sales = data.recentSales; 
-					localStorage.setItem('sales', JSON.stringify(sales));
-				}
-			}
-			renderAll();
-		} catch (e) {
-			console.error("Cloud gagal dimuat.");
-			renderAll();
-		}
-	}
-
-    // Fungsi untuk dipicu tombol refresh manual (opsional jika ingin instan)
-    async function manualRefresh() {
-        const btn = event.target;
-        const originalText = btn.innerText;
-        btn.innerText = "⏳ Memuat...";
-        btn.disabled = true;
-        await loadFromCloud();
-        btn.innerText = originalText;
-        btn.disabled = false;
+    function openModal(id) { 
+        document.getElementById(id).style.display = 'flex';
+        const inp = document.querySelector(`#${id} input`);
+        if(inp) setTimeout(() => inp.focus(), 100);
     }
-
-    async function syncToCloud(type, dataExtra = {}) {
-        try {
-            const payload = {
-                type: type,
-                staff: currentStaff,
-                ...dataExtra
-            };
-
-            if (type === "SYNC_STOCK") {
-                payload.products = products;
-            }
-
-            // Gunakan await agar proses sinkron selesai sebelum lanjut
-            await fetch(CLOUD_URL, {
-                method: "POST",
-                mode: "no-cors", 
-                body: JSON.stringify(payload)
-            });
-        } catch (e) {
-            console.error("Gagal sinkronisasi ke cloud.");
+    
+    function closeModal(id) { 
+        if(!id) {
+            document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');
+        } else {
+            document.getElementById(id).style.display = 'none';
         }
     }
 
-    // --- FUNGSI CORE ---
-
-    function renderAll() {
-        renderPOS();
-        renderStockTable();
-        renderSales();
-        updateTotal();
+    // Format Titik Otomatis (Poin 13)
+    function formatRupiah(el) {
+        let val = el.value.replace(/\D/g, "");
+        el.value = val.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
     }
 
     function updateStaff() {
-        currentStaff = document.getElementById('staff-name').value || "-";
+        currentStaff = document.getElementById('staff-input').value || "-";
         localStorage.setItem('currentStaff', currentStaff);
-        document.getElementById('display-karyawan').innerText = currentStaff;
+        closeModal('modal-staff');
+        renderAll();
     }
 
+    // Simpan Barang (Poin 17 & 22)
     function saveProduct() {
         const name = document.getElementById('p-name').value;
         const stockG = parseInt(document.getElementById('p-stock-gudang').value) || 0;
         const stockK = parseInt(document.getElementById('p-stock-kulkas').value) || 0;
-        const price = parseInt(document.getElementById('p-price').value) || 0;
+        const price = parseInt(document.getElementById('p-price').value.replace(/\./g, '')) || 0;
         
         if(!name) return alert("Nama barang wajib diisi!");
         
-        const idx = products.findIndex(p => p.name.toLowerCase() === name.toLowerCase());
-        if(idx >= 0) products[idx] = { ...products[idx], stockG, stockK, price };
-        else products.push({ name, stockG, stockK, price });
-        
-        saveData();
-        syncToCloud("SYNC_STOCK"); 
-        renderAll(); 
-        clearForm();
-    }
-
-    function renderPOS() {
-        const grid = document.getElementById('pos-grid');
-        grid.innerHTML = products.map((p, i) => `
-            <div class="product-item" onclick="openSaleModal(${i})">
-                <strong>${p.name}</strong><br>
-                <span class="badge">Kulkas: ${p.stockK}</span><br>
-                <small>Rp ${p.price.toLocaleString()}</small>
-            </div>
-        `).join('');
-    }
-
-    function renderStockTable() {
-        const list = document.getElementById('stock-list');
-        list.innerHTML = products.map((p, i) => `
-            <tr>
-                <td><strong>${p.name}</strong><br><small>Rp ${p.price.toLocaleString()}</small></td>
-                <td>G: ${p.stockG}<br>K: ${p.stockK}</td>
-                <td>
-                    <div class="action-stack">
-                        <button class="btn-move" onclick="moveStock(${i})">Pindah Kulkas</button>
-                        <button class="btn-adjust" onclick="adjustStockValue(${i})">Ubah Stok</button>
-                        <button class="btn-price" onclick="adjustPriceValue(${i})">Ubah Harga</button>
-                        <button class="btn-edit" onclick="editProductName(${i})">Ubah Nama</button>
-                    </div>
-                </td>
-            </tr>
-        `).join('');
-    }
-
-    function moveStock(index) {
-        const moveQty = parseInt(prompt(`Pindah berapa ke kulkas? (Gudang: ${products[index].stockG})`, "0"));
-        if(moveQty > 0 && moveQty <= products[index].stockG) {
-            products[index].stockG -= moveQty; products[index].stockK += moveQty;
-            saveData();
-            syncToCloud("SYNC_STOCK");
-            renderAll();
-        } else if (moveQty > 0) alert("Stok gudang tidak cukup!");
-    }
-
-    function adjustStockValue(index) {
-        const newG = prompt("Set ulang STOK GUDANG:", products[index].stockG);
-        const newK = prompt("Set ulang STOK KULKAS:", products[index].stockK);
-        if (newG !== null && newK !== null) {
-            products[index].stockG = parseInt(newG) || 0;
-            products[index].stockK = parseInt(newK) || 0;
-            saveData();
-            syncToCloud("SYNC_STOCK");
-            renderAll();
-        }
-    }
-
-    function adjustPriceValue(index) {
-        const newPrice = prompt(`Ubah harga untuk ${products[index].name}:`, products[index].price);
-        if (newPrice !== null) {
-            products[index].price = parseInt(newPrice) || 0;
-            saveData();
-            syncToCloud("SYNC_STOCK");
-            renderAll();
-        }
-    }
-
-    function editProductName(index) {
-        const oldName = products[index].name;
-        const newName = prompt("Ubah nama barang:", oldName);
-        if (newName) { 
-            products[index].name = newName; 
-            saveData();
-            syncToCloud("SYNC_STOCK");
-            renderAll(); 
-        }
+        db.ref('products/' + name.replace(/[\.\#\$\[\]\s]/g, '_')).set({
+            name, stockG, stockK, price
+        }).then(() => {
+            closeModal('modal-input');
+            ['p-name', 'p-stock-gudang', 'p-stock-kulkas', 'p-price'].forEach(id => document.getElementById(id).value = "");
+        });
     }
 
     function openSaleModal(i) {
         selectedIdx = i;
-        document.getElementById('modal-title').innerText = products[i].name;
-        document.getElementById('modal-stock-info').innerText = `Tersedia di kulkas: ${products[i].stockK}`;
-        document.getElementById('modal').style.display = 'flex';
+        const p = products[i];
+        document.getElementById('info-barang-jual').innerText = `${p.name} - Rp ${p.price.toLocaleString('id-ID')}`;
+        document.getElementById('buy-qty').value = 1;
+        openModal('modal-sale');
     }
 
     async function processSale() {
         const qty = parseInt(document.getElementById('buy-qty').value);
         const p = products[selectedIdx];
         if(qty > p.stockK) return alert("Stok kulkas tidak cukup!");
-        if(qty <= 0) return alert("Jumlah tidak valid!");
         
-        const saleData = {
-            id: Date.now(),
+        const total = p.price * qty;
+        const saleId = db.ref('sales').push().key;
+
+        const updates = {};
+        updates['/sales/' + saleId] = {
+            shiftId, 
             time: new Date().toLocaleString('id-ID'),
-            name: p.name,
-            qty: qty,
-            total: p.price * qty,
+            name: p.name, 
+            qty, 
+            total, 
             staff: currentStaff
         };
+        updates['/products/' + p.id + '/stockK'] = p.stockK - qty;
 
-        p.stockK -= qty;
-        sales.push(saleData);
+        await db.ref().update(updates);
+        closeModal('modal-sale');
         
-        saveData();
-        renderAll(); 
-        closeModal();
-
-        // Proses Cloud di background agar aplikasi tetap cepat
-        await syncToCloud("SALE", saleData);
-        await syncToCloud("SYNC_STOCK");
+        // Tampilkan Kalkulator (Poin 18)
+        document.getElementById('calc-total').innerText = "RP. " + total.toLocaleString('id-ID');
+        document.getElementById('calc-bayar').value = "";
+        document.getElementById('calc-result').innerText = "";
+        openModal('modal-calc');
     }
 
-    function deleteSaleItem(id) {
-        if(confirm("Batalkan item ini? Stok kulkas akan dikembalikan di lokal.")) {
-            const saleIdx = sales.findIndex(s => s.id === id);
-            if(saleIdx > -1) {
-                const item = sales[saleIdx];
-                const prodIdx = products.findIndex(p => p.name === item.name);
-                if(prodIdx > -1) products[prodIdx].stockK += item.qty;
-                sales.splice(saleIdx, 1);
-                saveData();
-                syncToCloud("SYNC_STOCK");
-                renderAll();
-            }
+    function hitungKembalian() {
+        const total = parseInt(document.getElementById('calc-total').innerText.replace(/[^\d]/g, ''));
+        const bayar = parseInt(document.getElementById('calc-bayar').value.replace(/\./g, '')) || 0;
+        const kembalian = bayar - total;
+        
+        const resDiv = document.getElementById('calc-result');
+        if(kembalian < 0) {
+            resDiv.innerText = "UANG KURANG!";
+            resDiv.style.color = "red";
+        } else {
+            resDiv.innerText = "KEMBALIAN: RP. " + kembalian.toLocaleString('id-ID');
+            resDiv.style.color = "var(--danger)";
+        }
+    }
+
+    function renderAll() {
+        const shiftSales = allSales.filter(s => s.shiftId === shiftId);
+        const totalShift = shiftSales.reduce((a, b) => a + b.total, 0);
+
+        // Render Rak (Poin 10)
+        document.getElementById('pos-grid').innerHTML = products.map((p, i) => `
+            <div class="product-item" onclick="openSaleModal(${i})">
+                <div class="p-name">${p.name}</div>
+                <div class="p-stock">Kulkas: ${p.stockK}</div>
+                <div class="p-price">Rp ${p.price.toLocaleString('id-ID')}</div>
+            </div>
+        `).join('');
+
+        // Render Riwayat
+        document.getElementById('sales-log').innerHTML = [...shiftSales].reverse().map(s => `
+            <tr><td>${s.time.split(' ')[1]}</td><td>${s.name}</td><td>${s.qty}</td><td>${s.total.toLocaleString('id-ID')}</td></tr>
+        `).join('');
+
+        // Render Pop-up Stok (Poin 6)
+        document.getElementById('stock-list').innerHTML = products.map((p) => `
+            <tr>
+                <td>${p.name}</td>
+                <td style="font-weight:bold; color:var(--primary)">${p.stockG}</td>
+                <td>${p.stockK}</td>
+                <td>
+                    <button class="btn-green" style="padding:4px 8px; margin:0; width:auto; display:inline-block; font-size:0.8rem;" onclick="addStockGudang('${p.id}')">➕ Stok G</button>
+                    <button class="btn-blue" style="padding:4px 8px; font-size:0.8rem;" onclick="moveStock('${p.id}')">📦 Pindah ke K</button>
+                </td>
+            </tr>
+        `).join('');
+
+        document.getElementById('staff-label').innerText = currentStaff;
+        document.getElementById('display-total-val').innerText = `= RP. ${totalShift.toLocaleString('id-ID')}`;
+    }
+
+    // Tambah Stok Gudang (Poin 28)
+    function addStockGudang(id) {
+        const p = products.find(x => x.id === id);
+        const qty = parseInt(prompt(`Masukkan JUMLAH TAMBAHAN stok untuk ${p.name}:`, "0"));
+        if(!isNaN(qty) && qty > 0) {
+            db.ref('products/'+id).update({ stockG: p.stockG + qty });
+        }
+    }
+
+    function moveStock(id) {
+        const p = products.find(x => x.id === id);
+        const qty = parseInt(prompt(`Pindah berapa dari Gudang ke Kulkas untuk ${p.name}?\n(Stok Gudang: ${p.stockG})`, "0"));
+        if(!isNaN(qty) && qty > 0 && qty <= p.stockG) {
+            db.ref('products/'+id).update({ stockG: p.stockG - qty, stockK: p.stockK + qty });
+        } else if (qty > p.stockG) {
+            alert("Stok gudang tidak mencukupi!");
         }
     }
 
     function resetShift() {
-        if(confirm("Hapus riwayat penjualan shift ini dari layar?")) {
-            sales = []; 
-            localStorage.setItem('sales', JSON.stringify(sales));
-            renderAll();
+        if(confirm("Tampilan riwayat layar akan dibersihkan untuk shift baru. Data di database TETAP AMAN.")) {
+            shiftId = Date.now().toString();
+            localStorage.setItem('shiftId', shiftId);
+            location.reload();
         }
     }
 
-    function saveData() {
-        localStorage.setItem('products', JSON.stringify(products));
-        localStorage.setItem('sales', JSON.stringify(sales));
-    }
-
-    function closeModal() { document.getElementById('modal').style.display = 'none'; }
-    
-    function renderSales() {
-        document.getElementById('sales-log').innerHTML = sales.map(s => `
-            <tr><td>${s.time.split(' ')[1] || s.time}</td><td>${s.name}</td><td>${s.qty}</td><td>${s.total.toLocaleString()}</td><td><button class="btn-del-item" onclick="deleteSaleItem(${s.id})">✖</button></td></tr>
-        `).reverse().join('');
-    }
-
-    function updateTotal() {
-        const total = sales.reduce((sum, s) => sum + s.total, 0);
-        document.getElementById('total-revenue').innerText = `Rp ${total.toLocaleString()}`;
-    }
-
-    function clearForm() {
-        ['p-name', 'p-stock-gudang', 'p-stock-kulkas', 'p-price'].forEach(id => document.getElementById(id).value = "");
-    }
-
+    // PDF Laporan (Poin 4 & 29)
     function exportPDF() {
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF();
-        doc.setFontSize(18);
-        doc.text("LAPORAN PENJUALAN & STOK SHIFT", 14, 15);
+        const sales = allSales.filter(s => s.shiftId === shiftId);
+        const tgl = new Date().toLocaleDateString('id-ID');
+        const totalP = sales.reduce((a, b) => a + b.total, 0);
+        
+        doc.setFontSize(10);
+        doc.text(tgl, 160, 10); // Tanggal kanan atas (Poin 4)
+        doc.setFontSize(16);
+        doc.text("LAPORAN SHIFT KASIR 25", 14, 20);
         doc.setFontSize(11);
-        doc.text(`Kasir: ${currentStaff}`, 14, 25);
-        doc.text(`Tanggal: ${new Date().toLocaleDateString('id-ID')}`, 14, 32);
+        doc.text(`Petugas: ${currentStaff}`, 14, 28);
 
-        doc.setFontSize(14);
-        doc.text("A. Detail Penjualan", 14, 45);
-        const salesData = sales.map(s => [s.time, s.name, s.qty, `Rp ${s.total.toLocaleString()}`]);
         doc.autoTable({
-            head: [['Waktu', 'Nama Barang', 'Qty', 'Total Harga']],
-            body: salesData,
-            startY: 50,
-            theme: 'grid'
+            head: [['Jam', 'Barang', 'Qty', 'Total']],
+            body: sales.map(s => [s.time.split(' ')[1], s.name, s.qty, s.total.toLocaleString()]),
+            startY: 35
         });
 
-        const finalYsales = doc.lastAutoTable.finalY;
-        doc.text(`Total Pemasukan: Rp ${sales.reduce((a,b)=>a+b.total,0).toLocaleString()}`, 14, finalYsales + 10);
-
-        doc.text("B. Laporan Sisa Stok", 14, finalYsales + 25);
-        const stockData = products.map(p => [p.name, p.stockG, p.stockK, p.stockG + p.stockK]);
+        const finalY = doc.lastAutoTable.finalY;
+        // Total Penjualan Shift (Poin 29)
+        doc.setFontSize(12);
+        doc.setFont(undefined, 'bold');
+        doc.text(`TOTAL PENJUALAN SHIFT: RP. ${totalP.toLocaleString('id-ID')}`, 14, finalY + 10);
+        
+        doc.setFontSize(11);
+        doc.text("STOK TERAKHIR:", 14, finalY + 20);
         doc.autoTable({
-            head: [['Nama Barang', 'Gudang', 'Kulkas', 'Total']],
-            body: stockData,
-            startY: finalYsales + 30,
-            theme: 'striped'
+            head: [['Nama Barang', 'Gudang', 'Kulkas']],
+            body: products.map(p => [p.name, p.stockG, p.stockK]),
+            startY: finalY + 25
         });
-
-        doc.save(`Laporan_${currentStaff}.pdf`);
+        doc.save(`Laporan_Shift_${tgl}.pdf`);
     }
+
+    // Keyboard Control (Poin 23 & 24)
+    window.addEventListener('keydown', (e) => {
+        if (e.key === "Escape") closeModal();
+        if (e.key === "Enter") {
+            const openModals = Array.from(document.querySelectorAll('.modal')).filter(m => m.style.display === 'flex');
+            if(openModals.length > 0) {
+                const currentModalId = openModals[openModals.length - 1].id;
+                if(currentModalId === 'modal-staff') updateStaff();
+                else if(currentModalId === 'modal-input') saveProduct();
+                else if(currentModalId === 'modal-sale') processSale();
+                else if(currentModalId === 'modal-calc') hitungKembalian();
+            }
+        }
+    });
+
+    // Clock (Poin 8)
+    setInterval(() => {
+        const now = new Date();
+        const jam = now.getHours().toString().padStart(2,'0');
+        const menit = now.getMinutes().toString().padStart(2,'0');
+        const tgl = now.getDate().toString().padStart(2,'0');
+        const bln = (now.getMonth()+1).toString().padStart(2,'0');
+        const thn = now.getFullYear();
+        document.getElementById('clock').innerText = `${jam}:${menit} - ${tgl}/${bln}/${thn}`;
+    }, 1000);
+
+    window.onload = renderAll;
 </script>
+
 </body>
 </html>
