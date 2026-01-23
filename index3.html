@@ -23,7 +23,7 @@
         .btn-header { padding: 8px 10px; border-radius: 6px; border: none; font-weight: bold; cursor: pointer; color: white; font-size: 0.7rem; margin-left: 5px; }
         
         .container { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; padding: 15px; }
-        .room-card { background: white; border-radius: 12px; padding: 12px; text-align: center; cursor: pointer; border-left: 8px solid #ddd; box-shadow: 0 3px 6px rgba(0,0,0,0.05); min-height: 250px; display: flex; flex-direction: column; justify-content: space-between; position: relative; transition: 0.3s; }
+        .room-card { background: white; border-radius: 12px; padding: 12px; text-align: center; cursor: pointer; border-left: 8px solid #ddd; box-shadow: 0 3px 6px rgba(0,0,0,0.05); min-height: 250px; display: flex; flex-direction: column; justify-content: space-between; position: relative; }
         
         .status-kosong { border-left-color: var(--kosong); }
         .status-terisi { border-left-color: var(--terisi); }
@@ -76,7 +76,7 @@
         <button class="btn-header admin-only" style="background:#2980b9" onclick="window.open('Kasir25.html', '_blank')">🛒 KASIR</button>
         <button class="btn-header admin-only" style="background:#e67e22" onclick="openM('expenseModal')">💸 PENGELUARAN</button>
         <button class="btn-header admin-only" style="background:#34495e" onclick="openLoanModal()">KASBON</button>
-        <button class="btn-header admin-only" style="background:#8e44ad" onclick="openM('reportFilterModal')">LAPORAN</button>
+        <button class="btn-header admin-only" style="background:#8e44ad" onclick="openReportFilter()">LAPORAN</button>
         <button class="btn-header admin-only" style="background:#16a085" onclick="openM('employeeModal')">KARYAWAN</button>
         <button class="btn-header" style="background:#c0392b" onclick="logout()">OUT</button>
     </div>
@@ -158,8 +158,8 @@
 <div class="modal" id="reportFilterModal">
     <div class="modal-content">
         <h3>Filter Laporan</h3>
-        <label>Dari Tanggal</label><input type="date" id="repStart">
-        <label>Sampai Tanggal</label><input type="date" id="repEnd">
+        <label>Dari (Tanggal & Jam)</label><input type="datetime-local" id="repStart">
+        <label>Sampai (Tanggal & Jam)</label><input type="datetime-local" id="repEnd">
         <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:20px">
             <button class="btn-main" style="background:#3498db" onclick="prepareReport('abang')">LAPORAN ABANG</button>
             <button class="btn-main" style="background:#9b59b6" onclick="prepareReport('kakak')">LAPORAN KAKAK</button>
@@ -223,26 +223,19 @@
     function renderGrid() {
         const cont = document.getElementById('roomContainer'); cont.innerHTML = '';
         const statusOrder = ['Kosong', 'Terisi', 'AC/Kipas', 'Kotor', 'Maintenance'];
-        
         let roomArr = [];
         for(let i=1; i<=24; i++) {
             const id = i.toString().padStart(2, '0');
             roomArr.push({id: id, ...(fullRooms[id] || { status: 'Kosong' })});
         }
-        
         roomArr.sort((a,b) => statusOrder.indexOf(a.status) - statusOrder.indexOf(b.status));
 
         roomArr.forEach(r => {
             let css = r.status.toLowerCase().replace(/\//g, '-').replace(/ /g, '-');
             let coTag = r.isCO ? '<span class="co-tag"> (CO)</span>' : '';
             let kendalaHtml = (r.kendala) ? `<span class="kendala-text">⚠️ ${r.kendala}</span>` : '';
-            
             let fn = r.status === 'Maintenance' ? `<div class="room-footnote" style="color:red">⚠️ ${r.keterangan || 'RUSAK'}</div>` : 
-                     `<div class="room-footnote">
-                        <b>Nama:</b> ${r.guestName || '-'}<br>
-                        <b>Depo:</b> Rp ${(r.deposit || 0).toLocaleString()} | <b>Sisa:</b> Rp ${(r.kurang || 0).toLocaleString()}
-                        ${kendalaHtml}
-                      </div>`;
+                     `<div class="room-footnote"><b>Nama:</b> ${r.guestName || '-'}<br><b>Depo:</b> Rp ${(r.deposit || 0).toLocaleString()} | <b>Sisa:</b> Rp ${(r.kurang || 0).toLocaleString()}${kendalaHtml}</div>`;
 
             cont.innerHTML += `<div class="room-card status-${css}" onclick="openRoom('${r.id}')">
                 <div style="font-size:0.7rem; font-weight:bold">${parseInt(r.id) <= 5 ? 'NON-AC' : 'AC'}</div>
@@ -265,9 +258,7 @@
                 <button class="btn-main admin-only" style="background:#8e44ad" onclick="showCheckIn('Menyambung satu hari')">Menyambung 1 Hari</button>
             `;
         } else if(r.status === 'Terisi' || r.status === 'AC/Kipas') {
-            if(r.status === 'Terisi') {
-                acts.innerHTML += `<button class="btn-main admin-only" style="background:#e67e22" onclick="moveRoom()">Pindah Kamar</button>`;
-            }
+            if(r.status === 'Terisi') acts.innerHTML += `<button class="btn-main admin-only" style="background:#e67e22" onclick="moveRoom()">Pindah Kamar</button>`;
             acts.innerHTML += `<button class="btn-main admin-only" style="background:var(--kotor)" onclick="checkOut()">Check-Out (Bersihkan)</button>`;
         } else if(r.status === 'Kotor') {
             let kndHtml = r.kendala ? `<div style="color:red; margin:10px 0; font-size:0.8rem">Kendala: ${r.kendala}</div>` : '';
@@ -276,23 +267,18 @@
         
         if(r.status === 'Maintenance') acts.innerHTML = `<button class="btn-main admin-only" style="background:var(--kosong)" onclick="updateStatus('Kosong')">Selesai Perbaikan</button>`;
         else acts.innerHTML += `<button class="btn-main admin-only" style="background:var(--maintenance)" onclick="promptMaint()">Maintenance</button>`;
-        
         openM('roomModal');
     }
 
     function showCheckIn(type) { 
-        checkInType = type;
-        const id = currentRoomId; 
+        checkInType = type; const id = currentRoomId; 
         let basePrice = parseInt(id) <= 5 ? 150000 : 200000;
-        
         if(type === 'Menyambung setengah hari') basePrice = 100000;
-
         document.getElementById('ciTypeLabel').innerText = type;
         document.getElementById('gRoomId').value = id;
         document.getElementById('gPrice').value = basePrice;
         document.getElementById('gType').value = parseInt(id) <= 5 ? 'NON-AC' : 'AC';
         document.getElementById('gTime').value = new Date().toLocaleString('id-ID');
-        
         document.getElementById('modalStep1').classList.add('hidden'); 
         document.getElementById('modalStep2').classList.remove('hidden'); 
         calcTotalCheckIn();
@@ -310,18 +296,14 @@
         const dur = parseInt(document.getElementById('gDuration').value);
         const total = price * dur;
         const newTransRef = db.ref('transactions').push();
-        
         const d = { 
             id: currentRoomId, status: "Terisi", ciType: checkInType,
-            guestName: document.getElementById('gName').value, 
-            nik: document.getElementById('gNik').value, hp: document.getElementById('gHp').value,
-            address: document.getElementById('gAddress').value, guarantee: document.getElementById('gGuarantee').value,
-            deposit: parseInt(document.getElementById('gDeposit')?.value) || 0,
+            guestName: document.getElementById('gName').value, nik: document.getElementById('gNik').value, 
+            hp: document.getElementById('gHp').value, address: document.getElementById('gAddress').value, 
+            guarantee: document.getElementById('gGuarantee').value, deposit: parseInt(document.getElementById('gDeposit')?.value) || 0,
             kurang: parseInt(document.getElementById('gStatusBayar').value === 'Kurang' ? document.getElementById('gKurang')?.value : 0) || 0, 
-            timestamp: Date.now(), price: price, totalPrice: total, duration: dur,
-            isCO: false, transKey: newTransRef.key, kendala: "" 
+            timestamp: Date.now(), price: price, totalPrice: total, duration: dur, isCO: false, transKey: newTransRef.key, kendala: "" 
         };
-        
         newTransRef.set(d);
         db.ref('rooms/'+currentRoomId).set(d).then(() => closeM('roomModal'));
     }
@@ -331,70 +313,79 @@
         let knd = confirm("Ada kendala kamar?") ? prompt("Sebutkan kendala:") : "";
         db.ref('rooms/'+currentRoomId).update({ status: 'AC/Kipas', isCO: true, kendala: knd || "" });
         if(r.transKey) db.ref('transactions/'+r.transKey).update({ isCO: true, guestName: r.guestName, kendala: knd || "" });
-        
-        setTimeout(() => {
-            db.ref('rooms/'+currentRoomId).update({ status: 'Kotor' });
-            closeM('roomModal');
-        }, 500);
+        setTimeout(() => { db.ref('rooms/'+currentRoomId).update({ status: 'Kotor' }); closeM('roomModal'); }, 500);
     }
 
     function moveRoom() {
         const target = prompt("Nomor kamar tujuan (01-24):");
         if(!target || target === currentRoomId) return;
         if(fullRooms[target] && fullRooms[target].status !== 'Kosong') return alert("Kamar tujuan tidak kosong!");
-        let data = {...fullRooms[currentRoomId]};
-        let oldId = currentRoomId;
-        data.id = target;
-        data.guestName += ` >(${target})`;
-        db.ref('rooms/'+target).set(data);
-        db.ref('rooms/'+oldId).set({status:'Kosong'});
+        let data = {...fullRooms[currentRoomId]}; let oldId = currentRoomId;
+        data.id = target; data.guestName += ` >(${target})`;
+        db.ref('rooms/'+target).set(data); db.ref('rooms/'+oldId).set({status:'Kosong'});
         if(data.transKey) db.ref('transactions/'+data.transKey).update({ id: target, guestName: data.guestName });
         closeM('roomModal');
     }
 
+    function openReportFilter() {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = (now.getMonth() + 1).toString().padStart(2, '0');
+        const day = now.getDate().toString().padStart(2, '0');
+        const defaultTime = `${year}-${month}-${day}T18:00`;
+        document.getElementById('repStart').value = defaultTime;
+        document.getElementById('repEnd').value = defaultTime;
+        openM('reportFilterModal');
+    }
+
     async function prepareReport(mode) {
         currentMode = mode; 
-        const start = document.getElementById('repStart').value; 
-        const end = document.getElementById('repEnd').value;
-        if(!start || !end) return alert("Pilih tanggal!");
-        
+        const startVal = document.getElementById('repStart').value; 
+        const endVal = document.getElementById('repEnd').value;
+        if(!startVal || !endVal) return alert("Pilih Rentang Tanggal dan Jam!");
+        const startTime = new Date(startVal).getTime();
+        const endTime = new Date(endVal).getTime();
         const [sT, sE, sL] = await Promise.all([db.ref('transactions').once('value'), db.ref('expenses').once('value'), db.ref('loans').once('value')]);
         let html = '';
         const shifts = [{n:'Pagi/Siang (07-18)', s:7, e:18, id:'Pagi'}, {n:'Malam (18-07)', s:18, e:7, id:'Malam'}];
         
         shifts.forEach(sh => {
             html += `<h4>Tabel Shift ${sh.id}</h4><table class="preview-table" id="table${sh.id}">
-            <thead><tr><th>No</th><th>Jam</th><th>Kmr</th><th>Tamu</th><th>NIK/HP/Alamat</th><th>Status</th><th>Nominal</th><th>Aksi</th></tr></thead><tbody>`;
+            <thead><tr><th>No</th><th>Jam</th><th>Kmr</th><th>Tamu</th><th>Identitas</th><th>Status</th><th>Nominal</th><th>Aksi</th></tr></thead><tbody>`;
             let idx = 1;
             sT.forEach(c => {
-                const d = c.val(); const dt = new Date(d.timestamp); 
-                const dDate = dt.toISOString().split('T')[0];
-                const hour = dt.getHours();
-                const isMatch = (sh.s === 7) ? (hour >= 7 && hour < 18) : (hour >= 18 || hour < 7);
-                if(dDate >= start && dDate <= end && isMatch) {
+                const d = c.val(); const dt = new Date(d.timestamp); const hour = dt.getHours();
+                const isMatchShift = (sh.s === 7) ? (hour >= 7 && hour < 18) : (hour >= 18 || hour < 7);
+                if(d.timestamp >= startTime && d.timestamp <= endTime && isMatchShift) {
                     let price = d.totalPrice;
                     if(mode === 'kakak') price = (d.ciType === 'Menyambung setengah hari') ? 50000 : 140000;
-                    html += `<tr><td class="row-num">${idx++}</td><td>${dt.getHours()}:${dt.getMinutes()}</td><td>${d.id}</td><td contenteditable="true" class="editable-cell">${d.guestName}${d.isCO ? ' <span style="color:red">(CO)</span>' : ''}</td><td>${d.nik} / ${d.hp} / ${d.address}</td><td>${d.ciType}</td><td contenteditable="true" class="editable-cell" oninput="recalcAndReorder()">${price}</td><td><button style="background:red; color:white; border:none;" onclick="this.closest('tr').remove(); recalcAndReorder();">Hapus</button></td></tr>`;
+                    html += `<tr><td class="row-num">${idx++}</td><td>${dt.getHours().toString().padStart(2,'0')}:${dt.getMinutes().toString().padStart(2,'0')}</td><td>${d.id}</td><td contenteditable="true" class="editable-cell">${d.guestName}${d.isCO ? ' <span style="color:red">(CO)</span>' : ''}</td><td>${d.nik} / ${d.hp} / ${d.address}</td><td>${d.ciType}</td><td contenteditable="true" class="editable-cell" oninput="recalcAndReorder()">${price}</td><td><button style="background:red; color:white; border:none;" onclick="this.closest('tr').remove(); recalcAndReorder();">Hapus</button></td></tr>`;
                 }
             });
             html += `</tbody></table>`;
             
-            html += `<h5>Pengeluaran Shift ${sh.id}</h5><table class="preview-table" id="exp${sh.id}"><tbody>`;
+            html += `<h5>Tabel Pengeluaran ${sh.id}</h5><table class="preview-table" id="exp${sh.id}">
+            <thead><tr><th>Jam Input</th><th>Keterangan</th><th>Nominal</th><th>Aksi</th></tr></thead><tbody>`;
             sE.forEach(c => {
-                const d = c.val(); const dt = new Date(d.timestamp); const dDate = dt.toISOString().split('T')[0]; const hour = dt.getHours();
-                const isMatch = (sh.s === 7) ? (hour >= 7 && hour < 18) : (hour >= 18 || hour < 7);
-                if(dDate >= start && dDate <= end && isMatch) {
-                    html += `<tr><td contenteditable="true" class="editable-cell">${d.note}</td><td contenteditable="true" class="editable-cell" oninput="recalcAndReorder()">${d.amount}</td><td><button onclick="this.closest('tr').remove(); recalcAndReorder();">X</button></td></tr>`;
+                const d = c.val(); const dt = new Date(d.timestamp); const hour = dt.getHours();
+                const isMatchShift = (sh.s === 7) ? (hour >= 7 && hour < 18) : (hour >= 18 || hour < 7);
+                if(d.timestamp >= startTime && d.timestamp <= endTime && isMatchShift) {
+                    const tStr = `${dt.getHours().toString().padStart(2,'0')}:${dt.getMinutes().toString().padStart(2,'0')}`;
+                    html += `<tr><td>${tStr}</td><td contenteditable="true" class="editable-cell">${d.note}</td><td contenteditable="true" class="editable-cell" oninput="recalcAndReorder()">${d.amount}</td><td><button onclick="this.closest('tr').remove(); recalcAndReorder();">X</button></td></tr>`;
                 }
             });
             html += `</tbody></table>`;
         });
 
         if(mode === 'abang') {
-            html += `<h4>Tabel Kasbon</h4><table class="preview-table" id="tableLoan"><tbody>`;
+            html += `<h4>Tabel Kasbon</h4><table class="preview-table" id="tableLoan">
+            <thead><tr><th>Jam Input</th><th>Nama Karyawan</th><th>Nominal</th><th>Aksi</th></tr></thead><tbody>`;
             sL.forEach(c => {
-                const d = c.val(); const dDate = new Date(d.timestamp).toISOString().split('T')[0];
-                if(dDate >= start && dDate <= end) html += `<tr><td>${d.emp}</td><td contenteditable="true" class="editable-cell" oninput="recalcAndReorder()">${d.amount}</td><td><button onclick="this.closest('tr').remove(); recalcAndReorder();">X</button></td></tr>`;
+                const d = c.val(); const dt = new Date(d.timestamp);
+                if(d.timestamp >= startTime && d.timestamp <= endTime) {
+                    const tStr = `${dt.getHours().toString().padStart(2,'0')}:${dt.getMinutes().toString().padStart(2,'0')}`;
+                    html += `<tr><td>${tStr}</td><td>${d.emp}</td><td contenteditable="true" class="editable-cell" oninput="recalcAndReorder()">${d.amount}</td><td><button onclick="this.closest('tr').remove(); recalcAndReorder();">X</button></td></tr>`;
+                }
             });
             html += `</tbody></table>`;
         }
@@ -403,45 +394,43 @@
     }
 
     function recalcAndReorder() {
-        // Re-order numbers
-        ['Pagi', 'Malam'].forEach(sid => {
-            let i = 1;
-            document.querySelectorAll(`#table${sid} tbody tr`).forEach(tr => { tr.querySelector('.row-num').innerText = i++; });
+        ['Pagi', 'Malam'].forEach(sid => { 
+            let i = 1; 
+            document.querySelectorAll(`#table${sid} tbody tr`).forEach(tr => { tr.querySelector('.row-num').innerText = i++; }); 
         });
-
         let tsP = 0, tsM = 0, teP = 0, teM = 0, tK = 0;
         document.querySelectorAll('#tablePagi tbody tr').forEach(tr => tsP += parseInt(tr.cells[6].innerText) || 0);
         document.querySelectorAll('#tableMalam tbody tr').forEach(tr => tsM += parseInt(tr.cells[6].innerText) || 0);
-        document.querySelectorAll('#expPagi tbody tr').forEach(tr => teP += parseInt(tr.cells[1].innerText) || 0);
-        document.querySelectorAll('#expMalam tbody tr').forEach(tr => teM += parseInt(tr.cells[1].innerText) || 0);
-        if(currentMode === 'abang') document.querySelectorAll('#tableLoan tbody tr').forEach(tr => tK += parseInt(tr.cells[1].innerText) || 0);
-
+        document.querySelectorAll('#expPagi tbody tr').forEach(tr => teP += parseInt(tr.cells[2].innerText) || 0);
+        document.querySelectorAll('#expMalam tbody tr').forEach(tr => teM += parseInt(tr.cells[2].innerText) || 0);
+        if(currentMode === 'abang') document.querySelectorAll('#tableLoan tbody tr').forEach(tr => tK += parseInt(tr.cells[2].innerText) || 0);
+        
         globalSums = { sewa: tsP + tsM, pengeluaran: teP + teM, kasbon: tK, pagi: tsP - teP, malam: tsM - teM };
-
+        
+        const rumusTxt = (currentMode === 'kakak') ? "Grand Total = Sewa Kamar - Pengeluaran" : "Grand Total = Sewa Kamar - Pengeluaran - Kasbon";
         document.getElementById('grandTotalArea').innerHTML = `
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px">
                 <div style="border:1px solid #ddd; padding:5px"><b>Setoran Pagi:</b> Rp ${(globalSums.pagi).toLocaleString()}</div>
                 <div style="border:1px solid #ddd; padding:5px"><b>Setoran Malam:</b> Rp ${(globalSums.malam - (currentMode === 'abang' ? tK : 0)).toLocaleString()}</div>
-            </div>
-            <hr>
+            </div><hr>
             <div>Sewa: Rp ${globalSums.sewa.toLocaleString()} | Pengeluaran: Rp ${globalSums.pengeluaran.toLocaleString()} | Kasbon: Rp ${tK.toLocaleString()}</div>
             <div style="font-size:1.4rem; color:red">GRAND TOTAL: Rp ${(globalSums.sewa - globalSums.pengeluaran - tK).toLocaleString()}</div>
+            <div style="font-size:0.7rem; color:gray; font-style:italic">${rumusTxt}</div>
         `;
     }
 
     function exportToPDF() {
         const { jsPDF } = window.jspdf; const doc = new jsPDF();
-        const start = document.getElementById('repStart').value;
-        const end = document.getElementById('repEnd').value;
-        
+        const sRaw = document.getElementById('repStart').value.split('T')[0];
+        const eRaw = document.getElementById('repEnd').value.split('T')[0];
         doc.setFontSize(16); doc.text("Laporan Wisma 25", 14, 15);
         doc.setFontSize(9); 
-        const tglText = (start === end) ? formatDate(start) : `${formatDate(start)} - ${formatDate(end)}`;
+        const tglText = (sRaw === eRaw) ? formatDate(sRaw) : `${formatDate(sRaw)} - ${formatDate(eRaw)}`;
         doc.text(tglText, 196, 15, { align: 'right' });
 
         let finalY = 20;
         const sections = [
-            {id:'tablePagi', title:'Shift Pagi/Siang'}, {id:'expPagi', title:'Tabel Pengeluaran Pagi'},
+            {id:'tablePagi', title:'Shift Pagi/Siang'}, {id:'expPagi', title:'Tabel Pengeluaran Pagi'}, 
             {id:'tableMalam', title:'Shift Malam'}, {id:'expMalam', title:'Tabel Pengeluaran Malam'}
         ];
         if(currentMode === 'abang') sections.push({id:'tableLoan', title:'Tabel Kasbon'});
@@ -449,21 +438,19 @@
         sections.forEach(s => {
             if(document.querySelector(`#${s.id} tbody tr`)) {
                 doc.setFontSize(10); doc.text(s.title, 14, finalY + 10);
-                doc.autoTable({ html: `#${s.id}`, startY: finalY + 12, theme: 'grid', styles: { fontSize: 7 }, columns: [0,1,2,3,4,5,6] });
+                doc.autoTable({ html: `#${s.id}`, startY: finalY + 12, theme: 'grid', styles: { fontSize: 7 } });
                 finalY = doc.lastAutoTable.finalY;
             }
         });
 
         doc.setFontSize(11); 
-        doc.text(`Total Sewa Kamar: Rp ${globalSums.sewa.toLocaleString()}`, 14, finalY + 15);
-        doc.text(`Total Pengeluaran: Rp ${globalSums.pengeluaran.toLocaleString()}`, 14, finalY + 21);
-        if(currentMode === 'abang') doc.text(`Total Kasbon: Rp ${globalSums.kasbon.toLocaleString()}`, 14, finalY + 27);
+        doc.text(`Sewa Kamar: Rp ${globalSums.sewa.toLocaleString()}`, 14, finalY + 15);
+        doc.text(`Pengeluaran: Rp ${globalSums.pengeluaran.toLocaleString()}`, 14, finalY + 21);
+        if(currentMode === 'abang') doc.text(`Kasbon: Rp ${globalSums.kasbon.toLocaleString()}`, 14, finalY + 27);
         
-        doc.setFontSize(14);
-        doc.text(`GRAND TOTAL: Rp ${(globalSums.sewa - globalSums.pengeluaran - globalSums.kasbon).toLocaleString()}`, 14, finalY + 36);
+        doc.setFontSize(14); doc.text(`GRAND TOTAL: Rp ${(globalSums.sewa - globalSums.pengeluaran - globalSums.kasbon).toLocaleString()}`, 14, finalY + 36);
         doc.setFontSize(7); 
-        const rumus = (currentMode === 'kakak') ? "Grand Total = Sewa Kamar - Pengeluaran" : "Grand Total = Sewa Kamar - Pengeluaran - Kasbon";
-        doc.text(rumus, 14, finalY + 41);
+        doc.text((currentMode === 'kakak') ? "Grand Total = Sewa Kamar - Pengeluaran" : "Grand Total = Sewa Kamar - Pengeluaran - Kasbon", 14, finalY + 41);
         doc.save(`Laporan_Wisma25.pdf`);
     }
 
@@ -475,17 +462,11 @@
     function saveExpense() { db.ref('expenses').push({note:document.getElementById('expNote').value, amount:parseInt(document.getElementById('expAmount').value), timestamp:Date.now()}).then(()=> { document.getElementById('expNote').value=''; document.getElementById('expAmount').value=''; closeM('expenseModal'); }); }
     function saveLoan() { db.ref('loans').push({emp:document.getElementById('loanEmpSelect').value, amount:parseInt(document.getElementById('loanAmount').value), timestamp:Date.now()}).then(()=> { document.getElementById('loanAmount').value=''; alert('Kasbon Tersimpan!'); }); }
     async function showLoanRekapDate() { 
-        const s = document.getElementById('rekapStart').value; 
-        const e = document.getElementById('rekapEnd').value;
+        const s = document.getElementById('rekapStart').value; const e = document.getElementById('rekapEnd').value;
         if(!s || !e) return alert("Pilih rentang tanggal!");
-        const snap = await db.ref('loans').once('value');
-        let rekap = {}; snap.forEach(c => { 
-            const d = c.val(); const dDate = new Date(d.timestamp).toISOString().split('T')[0];
-            if(dDate >= s && dDate <= e) rekap[d.emp] = (rekap[d.emp] || 0) + d.amount;
-        });
-        let txt = `REKAP KASBON (${s} s/d ${e}):\n`;
-        for(let n in rekap) txt += `- ${n}: Rp ${rekap[n].toLocaleString()}\n`;
-        alert(txt);
+        const snap = await db.ref('loans').once('value'); let rekap = {};
+        snap.forEach(c => { const d = c.val(); const dDate = new Date(d.timestamp).toISOString().split('T')[0]; if(dDate >= s && dDate <= e) rekap[d.emp] = (rekap[d.emp] || 0) + d.amount; });
+        let txt = `REKAP KASBON (${s} s/d ${e}):\n`; for(let n in rekap) txt += `- ${n}: Rp ${rekap[n].toLocaleString()}\n`; alert(txt);
     }
     function promptMaint() { const k = prompt("Keterangan Kerusakan:"); if(k) updateStatus('Maintenance', k); }
     function focusNext(e, id) { if(e.key==='Enter'){ e.preventDefault(); document.getElementById(id).focus(); } }
